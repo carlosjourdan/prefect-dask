@@ -158,7 +158,7 @@ class DaskTaskRunner(BaseTaskRunner):
         cluster_kwargs: dict = None,
         adapt_kwargs: dict = None,
         client_kwargs: dict = None,
-        copy_environment_variables: bool = False
+        copy_environment_variables: bool = False,
     ):
         # Validate settings and infer defaults
         if address:
@@ -236,7 +236,7 @@ class DaskTaskRunner(BaseTaskRunner):
             cluster_kwargs=self.cluster_kwargs,
             adapt_kwargs=self.adapt_kwargs,
             client_kwargs=self.client_kwargs,
-            copy_environment_variables=self.copy_environment_variables
+            copy_environment_variables=self.copy_environment_variables,
         )
 
     def __eq__(self, other: object) -> bool:
@@ -289,7 +289,7 @@ class DaskTaskRunner(BaseTaskRunner):
             async def wrap_call_with_environment_variables(**kwargs):
                 previous_environ_on_dask_cluster = dict(os.environ)
                 os.environ.update(environ_on_flow_environment)
-    
+
                 try:
                     return await call.func(**call_kwargs)
                 finally:
@@ -297,7 +297,7 @@ class DaskTaskRunner(BaseTaskRunner):
                     os.environ.update(previous_environ_on_dask_cluster)
 
             func = wrap_call_with_environment_variables
-        
+
         self._dask_futures[key] = self._client.submit(
             func,
             key=dask_key,
