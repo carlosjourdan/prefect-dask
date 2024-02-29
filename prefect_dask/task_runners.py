@@ -72,6 +72,7 @@ Example:
 """
 
 import inspect
+import os
 from contextlib import AsyncExitStack
 from typing import Awaitable, Callable, Dict, Optional, Union
 from uuid import UUID
@@ -157,6 +158,7 @@ class DaskTaskRunner(BaseTaskRunner):
         cluster_kwargs: dict = None,
         adapt_kwargs: dict = None,
         client_kwargs: dict = None,
+        copy_environment_variables: bool = False,
     ):
         # Validate settings and infer defaults
         if address:
@@ -207,6 +209,7 @@ class DaskTaskRunner(BaseTaskRunner):
         self.cluster_kwargs = cluster_kwargs
         self.adapt_kwargs = adapt_kwargs
         self.client_kwargs = client_kwargs
+        self.copy_environment_variables = copy_environment_variables
 
         # Runtime attributes
         self._client: "distributed.Client" = None
@@ -233,6 +236,7 @@ class DaskTaskRunner(BaseTaskRunner):
             cluster_kwargs=self.cluster_kwargs,
             adapt_kwargs=self.adapt_kwargs,
             client_kwargs=self.client_kwargs,
+            copy_environment_variables=self.copy_environment_variables,
         )
 
     def __eq__(self, other: object) -> bool:
@@ -246,6 +250,7 @@ class DaskTaskRunner(BaseTaskRunner):
                 and self.cluster_kwargs == other.cluster_kwargs
                 and self.adapt_kwargs == other.adapt_kwargs
                 and self.client_kwargs == other.client_kwargs
+                and self.copy_environment_variables == other.copy_environment_variables
             )
         else:
             return NotImplemented
@@ -276,8 +281,25 @@ class DaskTaskRunner(BaseTaskRunner):
         else:
             dask_key = str(key)
 
+        if not self.copy_environment_variables:
+            func = call.func
+        else:
+            environ_on_flow_environment = dict(os.environ)
+
+            async def wrap_call_with_environment_variables(**kwargs):
+                previous_environ_on_dask_cluster = dict(os.environ)
+                os.environ.update(environ_on_flow_environment)
+
+                try:
+                    return await call.func(**call_kwargs)
+                finally:
+                    os.environ.clear()
+                    os.environ.update(previous_environ_on_dask_cluster)
+
+            func = wrap_call_with_environment_variables
+
         self._dask_futures[key] = self._client.submit(
-            call.func,
+            func,
             key=dask_key,
             # Dask defaults to treating functions are pure, but we set this here for
             # explicit expectations. If this task run is submitted to Dask twice, the
