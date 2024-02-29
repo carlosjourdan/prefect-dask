@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import sys
+import os
 from functools import partial
 from uuid import uuid4
 
@@ -273,3 +274,45 @@ class TestDaskTaskRunner(TaskRunnerStandardTestSuite):
             )
             async with task_runner.start():
                 assert task_runner._cluster._adapt_called
+
+    async def test_copy_environment_variables_off(self):
+        
+        task_runner = DaskTaskRunner(copy_environment_variables=False)
+        
+        @task
+        def getenv(var_name:str):
+            return os.getenv(var_name)
+
+        @flow(task_runner=task_runner)
+        def my_flow():
+            env_name = "TEST_VAR"
+            env_value  = "test"
+            
+            os.environ[env_name] = env_value
+
+            env_value_in_dask = getenv.submit(env_name).result()
+
+            assert env_value_in_dask is None 
+
+        my_flow()
+
+    async def test_copy_environment_variables_on(self):
+        
+        task_runner = DaskTaskRunner(copy_environment_variables=True)
+        
+        @task
+        def getenv(var_name:str):
+            return os.getenv(var_name)
+
+        @flow(task_runner=task_runner)
+        def my_flow():
+            env_name = "TEST_VAR"
+            env_value  = "test"
+            
+            os.environ[env_name] = env_value
+
+            env_value_in_dask = getenv.submit(env_name).result()
+
+            assert env_value_in_dask == env_value
+
+        my_flow()
